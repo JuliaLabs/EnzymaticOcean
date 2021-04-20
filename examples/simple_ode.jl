@@ -2,9 +2,11 @@ using KernelAbstractions
 using CUDAKernels
 using CUDA
 
-@kernel function time_step!(x, k, Δt)
+@kernel function time_step!(x, k, Δt, N)
     I = @index(Global)
-    @inbounds x[I] = x[I] + Δt * k * x[I]
+    for _ in 1:N
+        @inbounds x[I] = x[I] + Δt * k * x[I]
+    end
 end
 
 """
@@ -25,16 +27,13 @@ function simulate_exponential_growth(; x₀, k, Δt, N, device)
     end
 
     time_step_kernel! = time_step!(device, 1)
-
-    for _ in 1:N
-        event = time_step_kernel!(x, k, Δt, ndrange=1)
-        wait(event)
-    end
+    event = time_step_kernel!(x, k, Δt, N, ndrange=1)
+    wait(event)
 
     return CUDA.@allowscalar x[1]
 end
 
-# 1 CPU kernel launch
+# 1 kernel launch
 @show simulate_exponential_growth(x₀=1.0, k=2.5, Δt=0.01, N=1, device=CPU())
 @show simulate_exponential_growth(x₀=1.0, k=2.5, Δt=0.01, N=1, device=CUDADevice())
 
