@@ -1,0 +1,8 @@
+name = "EnzymaticOcean"
+uuid = "1e308aaf-769c-447f-af17-2df7aeedce0a"
+version = "0.1.0"
+
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+CUDAKernels = "72cfdca4-0801-4ab0-bf6a-d52aa10adc57"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
