@@ -31,16 +31,16 @@ function simulate_exponential_growth(; x₀, k, Δt, N, device)
         wait(event)
     end
 
-    return x[1]
+    return CUDA.@allowscalar x[1]
 end
 
 # 1 CPU kernel launch
 @show simulate_exponential_growth(x₀=1.0, k=2.5, Δt=0.01, N=1, device=CPU())
-# @show simulate_exponential_growth(x₀=1, k=2.5, Δt=0.01, N=1, device=CUDADevice())
+@show simulate_exponential_growth(x₀=1.0, k=2.5, Δt=0.01, N=1, device=CUDADevice())
 
 # iterative kernel launches
 @show simulate_exponential_growth(x₀=1.0, k=2.5, Δt=0.01, N=100, device=CPU())
-# @show simulate_exponential_growth(x₀=1.0, k=2.5, Δt=0.01, N=100, device=CUDADevice())
+@show simulate_exponential_growth(x₀=1.0, k=2.5, Δt=0.01, N=100, device=CUDADevice())
 
 # Optimization problem:
 # If x₀=1, Δt = 0.01, N = 100, and x(t = 1) = π then what is k?
