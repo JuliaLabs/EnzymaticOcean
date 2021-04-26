@@ -92,7 +92,7 @@ uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 
 [[Enzyme]]
 deps = ["CEnum", "Cassette", "Enzyme_jll", "GPUCompiler", "LLVM", "Libdl"]
-git-tree-sha1 = "92fd51e04054d65fbc625381d9c7322724a92acb"
+git-tree-sha1 = "63917abfda7ea52ec5313e10942fc5c497ffc020"
 repo-rev = "vc/deferred_codegen"
 repo-url = "https://github.com/wsmoses/Enzyme.jl.git"
 uuid = "7da242da-08ed-463a-9acd-ee780be4f1d9"
