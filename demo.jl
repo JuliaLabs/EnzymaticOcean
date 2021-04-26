@@ -5,10 +5,6 @@ include("setup.jl")
     @inbounds out[i] = A[i]^2
 end
 
-@kernel function dsquare(out, dout, A, dA)
-    Enzyme.autodiff(gpu_square, __ctx__, Duplicated(out, dout), Duplicated(A, dA))
-end
-
 using CUDA
 
 A = CUDA.ones(128)
@@ -24,8 +20,9 @@ end
 dA = CUDA.zeros(128)
 dout = CUDA.ones(128)
 
-let kernel = dsquare(CUDADevice())
-    ev = kernel(out,dout, A, dA, ndrange=size(A))
+let kernel = autodiff(square(CUDADevice()))
+
+    ev = kernel(Duplicated(out, dout), Duplicated(A, dA), ndrange=size(A))
     wait(ev)
 
     @show all(Array(out) .== 1.0)
