@@ -34,9 +34,9 @@ version = "0.4.1"
 
 [[CUDA]]
 deps = ["AbstractFFTs", "Adapt", "BFloat16s", "CEnum", "CompilerSupportLibraries_jll", "DataStructures", "ExprTools", "GPUArrays", "GPUCompiler", "LLVM", "LazyArtifacts", "Libdl", "LinearAlgebra", "Logging", "MacroTools", "Memoize", "Printf", "Random", "RandomNumbers", "Reexport", "Requires", "SparseArrays", "SpecialFunctions", "Statistics", "TimerOutputs"]
-git-tree-sha1 = "e837ae29695082ce4bfd754ae188e72dc2c5604c"
+git-tree-sha1 = "a6ce96dcf22fc4f1bfdfac02d54f0b77ecf2a4cc"
 uuid = "052768ef-5323-5732-b1bb-66c8b64840ba"
-version = "3.0.0"
+version = "3.0.3"
 
 [[CUDAKernels]]
 deps = ["Adapt", "CUDA", "Cassette", "KernelAbstractions", "SpecialFunctions", "StaticArrays"]
@@ -54,9 +54,9 @@ version = "0.3.5"
 
 [[ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "42e3c181483fbd2c416087a0a93838803e358358"
+git-tree-sha1 = "5402b5674b3068ca570771c11da9a57bfa70acd4"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "0.9.38"
+version = "0.9.39"
 
 [[Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "SHA", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
@@ -92,11 +92,11 @@ uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 
 [[Enzyme]]
 deps = ["CEnum", "Cassette", "Enzyme_jll", "GPUCompiler", "LLVM", "Libdl"]
-git-tree-sha1 = "e857c5f1278589427259d239e210a775e0b869ab"
+git-tree-sha1 = "92fd51e04054d65fbc625381d9c7322724a92acb"
 repo-rev = "vc/deferred_codegen"
 repo-url = "https://github.com/wsmoses/Enzyme.jl.git"
 uuid = "7da242da-08ed-463a-9acd-ee780be4f1d9"
-version = "0.4.0"
+version = "0.4.1"
 
 [[Enzyme_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
