@@ -14,10 +14,9 @@ end
     Enzyme.autodiff_no_cassette(f′, args...)
 end
 
-
-function Enzyme.autodiff(kernel::KernelAbstractions.Kernel)
+function Enzyme.autodiff(kernel::KernelAbstractions.Kernel{<:Any, <:Any, <:Any, Fun}) where Fun
     function df(ctx, args...)
-        Enzyme.autodiff(kernel.fun, ctx, args...)
+        Enzyme.autodiff_no_cassette(kernel.f, ctx, args...)
     end
     similar(kernel, df)
 end
