@@ -49,14 +49,13 @@ The initial state must be stored in T[:, 1]. """
     nothing
 end
 
-@kernel function gradkern_convect!(T, dT, grid, κᵇ, dκᵇ, κᶜ, dκᶜ, surface_flux, Δt, t)
+@kernel function gradkern_convect!(T, grid, κᵇ, κᶜ, surface_flux, Δt, t)
     @static if USE_CPU
         func = cpu_kern_convect!
     else
         func = gpu_kern_convect!
     end
-    Enzyme.autodiff_no_cassette(func, __ctx__,
-        Duplicated(T, dT), grid, Duplicated(κᵇ, dκᵇ), Duplicated(κᶜ, dκᶜ), surface_flux, Δt, t)
+    Enzyme.autodiff_no_cassette(func, __ctx__, T, grid, κᵇ, κᶜ, surface_flux, Δt, t)
 end
 
 function convect!(T, grid, κᵇ, κᶜ, surface_flux, Δt, t; prev=nothing)
@@ -82,6 +81,9 @@ function gradconvect!(T, dT, grid, κᵇ, dκᵇ, κᶜ, dκᶜ, surface_flux, �
             prev = Event(CUDADevice())
         end
     end
-    kern(T, dT, grid, κᵇ, dκᵇ, κᶜ, dκᶜ, surface_flux, Δt, t; ndrange = size(T, 1), dependencies=prev)
+    T′ = Duplicated(T, dT)
+    κᵇ′ = Duplicated(κᵇ, dκᵇ)
+    κᶜ′ = Duplicated(κᶜ, dκᶜ)
+    kern(T′, grid, κᵇ′, κᶜ′, surface_flux, Δt, t; ndrange = size(T, 1), dependencies=prev)
 end
 
