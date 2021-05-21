@@ -1,7 +1,7 @@
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-CUDAKernels = "72cfdca4-0801-4ab0-bf6a-d52aa10adc57"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 GPUCompiler = "61eb1bfa-7361-4325-ad38-22787b887f55"
-KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+Oceananigans = "9e8cae18-63c1-5223-a75c-80ca9d6e9a09"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
