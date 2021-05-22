@@ -49,16 +49,6 @@ The initial state must be stored in T[:, 1]. """
     nothing
 end
 
-@kernel function gradkern_convect!(T, dT, grid, κᵇ, dκᵇ, κᶜ, dκᶜ, surface_flux, Δt, t)
-    @static if USE_CPU
-        func = cpu_kern_convect!
-    else
-        func = gpu_kern_convect!
-    end
-    Enzyme.autodiff_no_cassette(func, __ctx__,
-        Duplicated(T, dT), grid, Duplicated(κᵇ, dκᵇ), Duplicated(κᶜ, dκᶜ), surface_flux, Δt, t)
-end
-
 function convect!(T, grid, κᵇ, κᶜ, surface_flux, Δt, t; prev=nothing)
     if T isa Array
         kern = kern_convect!(CPU(), 256)
@@ -75,13 +65,17 @@ Base.size(x::Enzyme.Duplicated, i) = size(x.val, i)
 
 function gradconvect!(T, dT, grid, κᵇ, dκᵇ, κᶜ, dκᶜ, surface_flux, Δt, t; prev=nothing)
     if T isa Array
-        kern = gradkern_convect!(CPU(), 256)
+        kern = kern_convect!(CPU(), 256)
     else
-        kern = gradkern_convect!(CUDADevice())
+        kern = kern_convect!(CUDADevice())
         if prev === nothing
             prev = Event(CUDADevice())
         end
     end
-    kern(T, dT, grid, κᵇ, dκᵇ, κᶜ, dκᶜ, surface_flux, Δt, t; ndrange = size(T, 1), dependencies=prev)
+    kern′ = autodiff(kern)
+    T′ = Duplicated(T, dT)
+    κᵇ′ = Duplicated(κᵇ, dκᵇ)
+    κᶜ′ = Duplicated(κᶜ, dκᶜ)
+    kern′(T′, grid, κᵇ′, κᶜ′, surface_flux, Δt, t; ndrange = size(T, 1), dependencies=prev)
 end
 
