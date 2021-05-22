@@ -9,6 +9,7 @@ using InteractiveUtils
 using Adapt
 
 using Enzyme
+using ChainRulesCore
 
 # Grid
 struct RegularGrid
@@ -43,39 +44,47 @@ end
 """
 Conduct forward run with no error / loss calculation.
 The initial state must be stored in T[:, 1]. """
-@kernel function kern_convect!(T, grid, κᵇ, κᶜ, surface_flux, Δt, t)
+@kernel function kern_convect!(T, Tprev, grid, κᵇ, κᶜ, surface_flux, Δt)
     i = @index(Global, Linear)
-    T[i, t] = T[i, t-1] - Δt * ∂zᶜ(i, grid, diffusive_flux, κᵇ[1], κᶜ[1], surface_flux, view(T, :, t-1))
+    T[i] = Tprev[i] - Δt * ∂zᶜ(i, grid, diffusive_flux, κᵇ[1], κᶜ[1], surface_flux, Tprev)
     nothing
 end
 
-function convect!(T, grid, κᵇ, κᶜ, surface_flux, Δt, t; prev=nothing)
+function convect!(Tprev, grid, κᵇ, κᶜ, surface_flux, Δt#=, prev=#)
+    T = similar(Tprev)
     if T isa Array
         kern = kern_convect!(CPU(), 256)
     else
         kern = kern_convect!(CUDADevice())
-        if prev === nothing
-            prev = Event(CUDADevice())
-        end
     end
-    kern(T, grid, κᵇ, κᶜ, surface_flux, Δt, t; ndrange = size(T, 1), dependencies=prev)
+    event = kern(T, Tprev, grid, κᵇ, κᶜ, surface_flux, Δt; ndrange = size(T, 1)#=; dependencies=prev=#)
+    wait(event) # either device wait or propagate event
+    return T
 end
 
 Base.size(x::Enzyme.Duplicated, i) = size(x.val, i)
 
-function gradconvect!(T, dT, grid, κᵇ, dκᵇ, κᶜ, dκᶜ, surface_flux, Δt, t; prev=nothing)
-    if T isa Array
+function gradconvect!(Tprev, dT, grid, κᵇ, κᶜ, surface_flux, Δt #=, prev=#)
+    if Tprev isa Array
         kern = kern_convect!(CPU(), 256)
     else
         kern = kern_convect!(CUDADevice())
-        if prev === nothing
-            prev = Event(CUDADevice())
-        end
     end
     kern′ = autodiff(kern)
-    T′ = Duplicated(T, dT)
-    κᵇ′ = Duplicated(κᵇ, dκᵇ)
-    κᶜ′ = Duplicated(κᶜ, dκᶜ)
-    kern′(T′, grid, κᵇ′, κᶜ′, surface_flux, Δt, t; ndrange = size(T, 1), dependencies=prev)
+    T′ = Duplicated(similar(Tprev), dT)
+    Tprev′ = Duplicated(Tprev, zero(Tprev))
+    κᵇ′ = Duplicated(κᵇ, zero(κᵇ))
+    κᶜ′ = Duplicated(κᶜ, zero(κᶜ))
+    event = kern′(T′, Tprev′,grid, κᵇ′, κᶜ′, surface_flux, Δt; ndrange = size(Tprev, 1)#=; dependencies=prev=#)
+    wait(event) # either device wait or propagate event
+    Tprev′.dval, κᵇ′.dval, κᶜ′.dval #=, event=#
 end
 
+import ChainRulesCore: rrule
+function rrule(::typeof(convect!), Tprev, grid, κᵇ, κᶜ, surface_flux, Δt)
+    function pullback(dT)
+        dTprev, dκᵇ, dκᶜ = gradconvect!(Tprev, dT, grid, κᵇ, κᶜ, surface_flux, Δt#=, prevEvent=#)
+        return (NO_FIELDS, dTprev, NoTangent(), dκᵇ, dκᶜ, NoTangent(), NoTangent())
+    end
+    return (convect!(Tprev, grid, κᵇ, κᶜ, surface_flux, Δt), pullback)
+end
