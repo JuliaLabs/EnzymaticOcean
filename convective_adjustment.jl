@@ -61,9 +61,3 @@ end
 
 model = Model(typeof(T0), background_diffusivity * 1.2, convection_diffusivity * 0.7)
 @show fit(model, Tdata; N = 100)
-
-# κᵇ, κᶜ = background_diffusivity * 100, convection_diffusivity * 0.7
-# o1 = mean( (model(T0, grid, κᵇ, κᶜ, surface_flux, time_step, Nt) .- Tdata).^2 )
-# κᵇ += 1e-6
-# o2 = mean( (model(T0, grid, κᵇ, κᶜ, surface_flux, time_step, Nt) .- Tdata).^2 )
-# @show (o2 - o1) / 1e-6
