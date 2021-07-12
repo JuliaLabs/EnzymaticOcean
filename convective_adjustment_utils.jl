@@ -1,9 +1,12 @@
-include("setup.jl")
+#include("setup.jl")
 
 using CUDA
 const USE_CPU = !CUDA.has_cuda_gpu()
 
-using KernelAbstractions.Extras: @unroll
+#using KernelAbstractions.Extras: @unroll
+using KernelAbstractions
+using KernelGradients
+using CUDAKernels
 using Statistics
 using InteractiveUtils
 using Adapt
