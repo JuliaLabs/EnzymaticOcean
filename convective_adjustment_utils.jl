@@ -32,7 +32,7 @@ zᶜ(grid::RegularGrid) = (-grid.Nz+1/2:-1/2) * grid.Δz
 @inline ∂zᶠ(i, grid, f::F, args...) where F<:Function = (f(i, grid, args...) - f(i-1, grid, args...)) / grid.Δz
 @inline ∂zᶜ(i, grid, f::F, args...) where F<:Function = (f(i+1, grid, args...) - f(i, grid, args...)) / grid.Δz
 
-diffusivity(i, grid, κᵇ, κᶜ, T) = ifelse(∂zᶠ(i, grid, T) < 0, κᶜ, κᵇ)
+diffusivity(i, grid, κᵇ, κᶜ, T) = Base.ifelse(∂zᶠ(i, grid, T) < 0, κᶜ, κᵇ)
 
 function diffusive_flux(i, grid, κᵇ, κᶜ, surface_flux, T)
     if i < 2 # bottom at i = 1

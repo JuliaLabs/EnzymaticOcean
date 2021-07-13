@@ -8,7 +8,7 @@ const stop_time = 1800
 if USE_CPU
     T0 = zeros(Float64, grid.Nz)
 else
-    T0 = CUDA.zeros(Float64, grid.Nz)  # Pre-alloc
+    T0 = CUDA.zeros(Float64, grid.Nz)
 end
 z = zᶜ(grid)
 temperature_gradient = 1e-4
@@ -16,6 +16,7 @@ surface_flux = 1e-4
 T0 .= 20 .+ temperature_gradient .* z
 
 
+# Convective adjustment function
 @gen function convective_adjustment(grid, surface_flux, T)
     # Construct priors (debug priors for now)
     convective_diffusivity = @trace(normal(10, 2), :convective_diffusivity)
@@ -26,7 +27,7 @@ T0 .= 20 .+ temperature_gradient .* z
     Nt = ceil(Int, stop_time / Δt)
 
     # Wrap priors into arrays for Enzyme
-    convective_diffusivity = adapt(typeof(T), [convective_diffusivity])  # Check in Gen docs whether there does not exist a better way to handle the arrays
+    convective_diffusivity = adapt(typeof(T), [convective_diffusivity])
     background_diffusivity = adapt(typeof(T), [background_diffusivity])
 
     for _ in 2:Nt
