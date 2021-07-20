@@ -42,18 +42,33 @@ end
     model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)  # Do I need to genify this at this point?
 end
 
+# Trace test
+#planner_params = PlannerParams(300, 3.0, 2000, 1.)
+#(trace, _) = Gen.generate(agent_model, (scene, dt, num_ticks, planner_params));
+#choices = Gen.get_choices(trace)
+
+# Might want a trace to dict func, i.e. to arrive at a syntax akin to
+#for i=1:1000
+#    trace = do_inference_agent_model(scene, dt, num_ticks, planner_params, start, measurements, 50)
+#    putTrace!(viz, i, trace_to_dict(trace))
+#end
+
 
 # Generate the perfect data -> QMC/LHS across the space of temperature gradient
 t_data = []
 for i in 1:Nt
     # Fixed real value
-    convective_diffusivity = 10
-    background_diffusivity = 1e-4
+    local convective_diffusivity = 10
+    local background_diffusivity = 1e-4
 
     # LHS of temperature_gradient
     T_start = 20 .+ temporary_temp_gradient .* z
     t_data[i] = model(grid, surface_flux, T_start, convective_diffusivity, background_diffusivity)
 end
+
+
+# Train custom data-driven proposal on the generated data.
+# See: https://github.com/probcomp/gen-quickstart/blob/master/tutorials/Data-Driven%20Proposals%20in%20Gen.ipynb
 
 
 function importance_sampling_inference(model, grid, surface_flux, T, ys, amount_of_computation)
