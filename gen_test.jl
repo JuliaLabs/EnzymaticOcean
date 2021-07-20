@@ -70,6 +70,29 @@ end
 ys = dataset_generation(500)
 
 
+# Preliminary inference program using importance sampling
+function importance_sampling_inference(model, grid, surface_flux, T, ys, amount_of_computation)
+
+    # Create the choice map to model addresses to observed
+    # values ys[i]
+    observations = Gen.choicemap()
+    for (i, y) in enumerate(ys)
+        observations[(:y, i)] = y
+    end
+
+    # In line with Gen's nomenclature we write our inputs as xs
+    xs = (grid, surface_flux, T)
+
+    # Perform importance sampling to find the most likely simulation trace
+    # consistent with our observations
+    (trace, _) = Gen.importance_resampling(model, xs, observations, amount_of_computation)
+    return trace
+end
+
+# Run the inference routine
+trace = importance_sampling_inference(convective_adjustment, grid, surface_flux, T0, ys, 200)
+
+
 #=
 Clean code aboce this point
 =#
@@ -86,31 +109,6 @@ Clean code aboce this point
 #end
 
 
-# Generate the perfect data -> QMC/LHS across the space of temperature gradient
-#for i in 1:Nt
-#    # Fixed real value
-#    local convective_diffusivity = 10
-#    local background_diffusivity = 1e-4
-#
-#    # LHS of temperature_gradient
-#    T_start = 20 .+ temporary_temp_gradient .* z
-#    t_data[i] = model(grid, surface_flux, T_start, convective_diffusivity, background_diffusivity)
-#end
-
 
 # Train custom data-driven proposal on the generated data.
 # See: https://github.com/probcomp/gen-quickstart/blob/master/tutorials/Data-Driven%20Proposals%20in%20Gen.ipynb
-
-
-#function importance_sampling_inference(model, grid, surface_flux, T, ys, amount_of_computation)
-#
-#    observations = Gen.choicemap()
-#    for (i, y) in enumerate(ys)
-#        observations[(:y, i)] = y
-#    end
-#
-#    # Perform importance sampling to find the most likely simulation trace
-#    # consistent with our observations
-#    (trace, lml_est) = Gen.importance_sampling(model, (grid, surface_flux, T), observations, amount_of_computation)
-#    return trace, lml_est
-#end
