@@ -48,7 +48,8 @@ end
     background_diffusivity = @trace(normal(1e-4, 3e-5), :background_diffusivity)
 
     # Do I need to genify this at this point?
-    model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)
+    T = model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)
+    return T
 end
 
 
