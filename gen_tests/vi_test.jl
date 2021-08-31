@@ -1,9 +1,8 @@
 #=
-Variational Inference Test for the Integration with the Probabilistic
-    Programming System Gen.
+Variational Inference Test for the Integration with Gen.
 =#
 
-include("convective_adjustment_utils.jl")
+include("../convective_adjustment_utils.jl")
 
 using Gen
 
@@ -21,11 +20,27 @@ surface_flux = 1e-4
 T0 .= 20 .+ temperature_gradient .* z
 
 
+# Custom gradient definition to use Enzyme
+struct ConvectGF <: CustomGradientGF{Vector{Float64}} end
+#(obj::ConvectGF)(args) = Gen.apply(obj, args)
+
+Gen.apply(::ConvectGF, args) = model(args...)
+function Gen.gradient(::ConvectGF, args, retval, retgrad)
+    dT = retgrad
+    _, pullback = rrule(model, args...)  # Run this in apply
+    _, _, dTgrad, dκᶜ, dκᵇ = pullback(dT)
+    @show dkᶜ, dκᵇ
+    return (nothing, nothing, dTgrad, dκᶜ, dκᵇ)
+end
+Gen.has_argument_grads(::ConvectGF) = (false, false, true, true, true)
+
+
 # Define the base model for the convective adjustment
 function model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)
     
     # Calculate Δt & Nt
     Δt = 0.2 * grid.Δz^2 / convective_diffusivity
+    @show Δt, convective_diffusivity
     Nt = ceil(Int, stop_time / Δt)
 
     # Wrap into arrays for Enzyme
@@ -38,23 +53,25 @@ function model(grid, surface_flux, T, convective_diffusivity, background_diffusi
     return T
 end
 
+const convectgf = ConvectGF()
 
 # Generative model in the probabilistic programming sense
 # for the convective adjustment model
 @gen function convective_adjustment(grid, surface_flux, T)
 
     # Construct priors (random debug priors for now)
-    convective_diffusivity = @trace(normal(10, 2), :convective_diffusivity)
+    convective_diffusivity = @trace(uniform(6.0, 14.0), :convective_diffusivity)
     background_diffusivity = @trace(normal(1e-4, 3e-5), :background_diffusivity)
 
-    # Do I need to genify this at this point?
-    T = model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)
+    #@show convective_adjustment, background_diffusivity
+
+    T = @trace(convectgf(grid, surface_flux, T, convective_diffusivity, background_diffusivity))
+    #T = model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)
     return T
 end
 
 
 # Approximation of the model
-# NOTE: Would we not seek to include "T" here?
 @gen function approx()
     @param convective_diffusivity_mu::Float64
     @param convective_diffusivity_std::Float64
@@ -87,7 +104,7 @@ function dataset_generation(datapoints::Int)
     return test_data
 end
 
-# Generate test set for importance sampling
+# Generate test set for VI
 ys = dataset_generation(500)
 
 
@@ -96,8 +113,8 @@ ys = dataset_generation(500)
 # ---> We are not using gradients here!! <---
 function variational_inference(model, grid, surface_flux, T, ys)
 
-    # Initialize the black-box variational inference parameters
-    init_param!(approx, :convective_diffusivity_mu, 0.)
+    # Initialize the black-box variational inference parameters  -> WARNING! THIS SHOULD NOT BE 0!
+    init_param!(approx, :convective_diffusivity_mu, 8.)
     init_param!(approx, :convective_diffusivity_std, 0.)
     init_param!(approx, :background_diffusivity_mu, 0.)
     init_param!(approx, :background_diffusivity_std, 0.)
@@ -110,17 +127,17 @@ function variational_inference(model, grid, surface_flux, T, ys)
     end
 
     # In line with Gen's nomenclature we write our inputs as xs
-    xs = (grid, surface_flux, T)
+    args = (grid, surface_flux, T)
 
     # Perform gradient descent updates
     # See: https://github.com/JuliaLabs/EnzymaticOcean/pull/7/commits/eb28c4a1b2e3f5bb63f5349ec467d6c82ecce64e
     # for further details on the custom gradient descent update
-    update = ParamUpdate(GradientDescent(1., 1000), approx)  #-> Will throw an error as we are not giving custom gradients yet
+    update = ParamUpdate(GradientDescent(1., 1000), approx)
 
     # Perform variational to find the most likely simulation trace
     # consistent with our observations
-    (elbo_estimate, traces, elbo_history) = Gen.black_box_vi!(model, xs, observations, approx, (), update;
-        iters=2000, samples_per_iter=100, verbose=True)
+    (elbo_estimate, traces, elbo_history) = Gen.black_box_vi!(convective_adjustment, args, observations, approx, (), update;
+        iters=2000, samples_per_iter=100, verbose=true)
     return traces
 end
 
