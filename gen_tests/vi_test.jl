@@ -22,13 +22,14 @@ T0 .= 20 .+ temperature_gradient .* z
 
 # Custom gradient definition to use Enzyme
 struct ConvectGF <: CustomGradientGF{Vector{Float64}} end
-#(obj::ConvectGF)(args) = Gen.apply(obj, args)
 
 Gen.apply(::ConvectGF, args) = model(args...)
 function Gen.gradient(::ConvectGF, args, retval, retgrad)
     dT = retgrad
-    _, pullback = rrule(model, args...)  # Run this in apply
+    _, pullback = rrule(model, args...)  # Possible Hack: Run this in apply
     _, _, dTgrad, dκᶜ, dκᵇ = pullback(dT)
+
+    # Debugging print-out
     @show dkᶜ, dκᵇ
     return (nothing, nothing, dTgrad, dκᶜ, dκᵇ)
 end
@@ -39,7 +40,10 @@ Gen.has_argument_grads(::ConvectGF) = (false, false, true, true, true)
 function model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)
     
     # Calculate Δt & Nt
+    # TODO: Use the max_convective_diffusivity here to stabilize the time-stepping?
     Δt = 0.2 * grid.Δz^2 / convective_diffusivity
+
+    # Debugging print-out
     @show Δt, convective_diffusivity
     Nt = ceil(Int, stop_time / Δt)
 
@@ -63,21 +67,21 @@ const convectgf = ConvectGF()
     convective_diffusivity = @trace(uniform(6.0, 14.0), :convective_diffusivity)
     background_diffusivity = @trace(normal(1e-4, 3e-5), :background_diffusivity)
 
+    # Debugging print-outs
     #@show convective_adjustment, background_diffusivity
 
     T = @trace(convectgf(grid, surface_flux, T, convective_diffusivity, background_diffusivity), :model)
-    #T = model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)
     return T
 end
 
 
 # Approximation of the model
 @gen function approx()
-    @param convective_diffusivity_mu::Float64
-    @param convective_diffusivity_std::Float64
+    @param convective_diffusivity_lb::Float64
+    @param convective_diffusivity_ub::Float64
     @param background_diffusivity_mu::Float64
     @param background_diffusivity_std::Float64
-    @trace(normal(convective_diffusivity_mu, convective_diffusivity_std), :convective_diffusivity)
+    @trace(uniform(convective_diffusivity_lb, convective_diffusivity_ub), :convective_diffusivity)
     @trace(normal(background_diffusivity_mu, background_diffusivity_std), :background_diffusivity)
 end
 
@@ -105,17 +109,16 @@ function dataset_generation(datapoints::Int)
 end
 
 # Generate test set for VI
-ys = dataset_generation(500)
+ys = dataset_generation(50)  # NOTE: Used to use 500 here, but downgraded this to 50 for debugging purposes
 
 
 # Inference program to perform variational inference
 # on the convective adjustment generative model
-# ---> We are not using gradients here!! <---
 function variational_inference(model, grid, surface_flux, T, ys)
 
-    # Initialize the black-box variational inference parameters  -> WARNING! THIS SHOULD NOT BE 0!
-    init_param!(approx, :convective_diffusivity_mu, 8.)
-    init_param!(approx, :convective_diffusivity_std, 0.)
+    # Initialize the black-box variational inference parameters
+    init_param!(approx, :convective_diffusivity_lb, 4.)
+    init_param!(approx, :convective_diffusivity_ub, 16.)
     init_param!(approx, :background_diffusivity_mu, 0.)
     init_param!(approx, :background_diffusivity_std, 0.)
 
@@ -126,15 +129,15 @@ function variational_inference(model, grid, surface_flux, T, ys)
         observations[(:y, i)] = y
     end
 
-    # In line with Gen's nomenclature we write our inputs as xs
+    # Input arguments
     args = (grid, surface_flux, T)
 
     # Perform gradient descent updates
     # See: https://github.com/JuliaLabs/EnzymaticOcean/pull/7/commits/eb28c4a1b2e3f5bb63f5349ec467d6c82ecce64e
     # for further details on the custom gradient descent update
-    update = ParamUpdate(GradientDescent(1., 1000), approx)
+    update = ParamUpdate(GradientDescent(0.5, 900), approx)
 
-    # Perform variational to find the most likely simulation trace
+    # Perform variational inference to find the most likely simulation trace
     # consistent with our observations
     (elbo_estimate, traces, elbo_history) = Gen.black_box_vi!(convective_adjustment, args, observations, approx, (), update;
         iters=2000, samples_per_iter=100, verbose=true)
@@ -143,10 +146,5 @@ end
 
 # Run the inference routine
 traces = variational_inference(model, grid, surface_flux, T0, ys)
-
-
-
-trace = importance_sampling_inference(convective_adjustment, grid, surface_flux, T0, ys, 200)
-
 
 # Further analysis does yet have to be finalized
