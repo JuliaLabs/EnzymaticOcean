@@ -65,7 +65,7 @@ const convectgf = ConvectGF()
 
     #@show convective_adjustment, background_diffusivity
 
-    T = @trace(convectgf(grid, surface_flux, T, convective_diffusivity, background_diffusivity))
+    T = @trace(convectgf(grid, surface_flux, T, convective_diffusivity, background_diffusivity), :model)
     #T = model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)
     return T
 end
