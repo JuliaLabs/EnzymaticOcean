@@ -41,7 +41,7 @@ function model(grid, surface_flux, T, convective_diffusivity, background_diffusi
     
     # Calculate Δt & Nt
     # TODO: Use the max_convective_diffusivity here to stabilize the time-stepping?
-    Δt = 0.2 * grid.Δz^2 / convective_diffusivity
+    Δt = 0.2 * grid.Δz^2 / convective_diffusivity  # TODO: Implement a fallback here to see whether this fixes the instabilities
 
     # Debugging print-out
     @show Δt, convective_diffusivity
@@ -119,8 +119,8 @@ function variational_inference(model, grid, surface_flux, T, ys)
     # Initialize the black-box variational inference parameters
     init_param!(approx, :convective_diffusivity_lb, 4.)
     init_param!(approx, :convective_diffusivity_ub, 16.)
-    init_param!(approx, :background_diffusivity_mu, 0.)
-    init_param!(approx, :background_diffusivity_std, 0.)
+    init_param!(approx, :background_diffusivity_mu, 2e-4)
+    init_param!(approx, :background_diffusivity_std, 8e-5)
 
     # Create the choice map to model addresses to observed
     # values ys[i]
@@ -137,11 +137,31 @@ function variational_inference(model, grid, surface_flux, T, ys)
     # for further details on the custom gradient descent update
     update = ParamUpdate(GradientDescent(0.5, 900), approx)
 
+    # Debug function
+    function print_traces(iter, traces, elbo_estimate)
+        @info "" traces[end] Gen.get_score(traces[end]) iter elbo_estimate
+    end
+
     # Perform variational inference to find the most likely simulation trace
     # consistent with our observations
-    (elbo_estimate, traces, elbo_history) = Gen.black_box_vi!(convective_adjustment, args, observations, approx, (), update;
-        iters=2000, samples_per_iter=100, verbose=true)
-    return traces
+    #(log_weight, var_trace, model_trace) = Gen.single_sample_gradient_estimate!(
+    #            approx, (),
+    #            convective_adjustment, args, observations, 1/100)
+
+    var_trace = Gen.simulate(approx, ())
+    constraints = Gen.merge(observations, get_choices(var_trace))
+    (model_trace, model_log_weight) = Gen.generate(convective_adjustment, args, constraints)
+
+    @show model_trace
+    @show model_log_weight
+
+
+    #(elbo_estimate, traces, elbo_history) = Gen.black_box_vi!(convective_adjustment, args, observations, approx, (), update;
+    #    iters=2000, samples_per_iter=100, verbose=true, callback=print_traces)
+    ##for trace in traces
+    ##    @show trace, Gen.get_score(trace)
+    ##end
+    #return traces
 end
 
 # Run the inference routine
