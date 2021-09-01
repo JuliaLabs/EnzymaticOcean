@@ -3,7 +3,7 @@ Importance Sampling Test for the Integration with the Probabilistic
     Programming System Gen.
 =#
 
-include("convective_adjustment_utils.jl")
+include("../convective_adjustment_utils.jl")
 
 using Gen
 
