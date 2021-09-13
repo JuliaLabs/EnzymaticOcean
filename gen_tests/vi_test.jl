@@ -29,7 +29,7 @@ function Gen.gradient(::ConvectGF, args, retval, retgrad)
     dT = retgrad
     _, pullback = ChainRulesCore.rrule_via_ad(Zygote.ZygoteRuleConfig(), model, args...)
     #_, pullback = rrule(model, args...)  # Possible Hack: Run this in apply
-    _, _, dTgrad, dκᶜ, dκᵇ = pullback(dT)
+    _, _, _, dTgrad, dκᶜ, dκᵇ = pullback(dT)
     return (nothing, nothing, dTgrad, dκᶜ, dκᵇ)
 end
 Gen.has_argument_grads(::ConvectGF) = (false, false, true, true, true)
