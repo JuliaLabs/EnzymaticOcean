@@ -1,7 +1,7 @@
 #include("setup.jl")
 
 using CUDA
-const USE_CPU = !CUDA.has_cuda_gpu()
+const USE_CPU = true #!CUDA.has_cuda_gpu() -> Debugging
 
 #using KernelAbstractions.Extras: @unroll
 using KernelAbstractions
