@@ -6,6 +6,37 @@ include("../convective_adjustment_utils.jl")
 
 using Gen
 using Zygote
+import Distributions
+using Distributions: truncated
+
+struct TruncatedNormal <: Gen.Distribution{Float64} end
+
+"""
+    trunc_normal(mu::Real, std::Real, lb::Real, ub::Real)
+Samples a `Float64` value from a normal distribution.
+"""
+const trunc_normal = TruncatedNormal()
+
+(d::TruncatedNormal)(mu, std, lb, ub) = Gen.random(d, mu, std, lb, ub)
+
+Gen.random(::TruncatedNormal, mu::Real, std::Real, lb::Real, ub::Real) =
+    rand(truncated(Distributions.Normal(mu, std), lb, ub))
+
+function Gen.logpdf(::TruncatedNormal, x::Real, mu::Real, std::Real, lb::Real, ub::Real)
+    d = truncated(Distributions.Normal(mu, std), lb, ub)
+    untrunc_lpdf = Distributions.logpdf(d.untruncated, x)
+    if d.tp > 0
+        untrunc_lpdf - d.logtp
+    elseif cdf(d.untruncated, lb) ≈ 1.0
+        untrunc_lpdf - Distributions.logccdf(d.untruncated, lb)
+    elseif cdf(d.untruncated, ub) ≈ 0.0
+        untrunc_lpdf - Distributions.logcdf(d.untruncated, ub)
+    end
+end
+
+# TODO @ludger logpdf_grad
+
+Gen.is_discrete(::TruncatedNormal) = false
 
 # Initial Conditions & Global Parameters
 grid = RegularGrid(Nz=32, Lz=128)
@@ -86,15 +117,16 @@ ys = dataset_generation(N)  # NOTE: Usage of 500 sample points is arbitrary here
 
 # Generative model in the probabilistic programming sense
 # for the convective adjustment model
-@gen function convective_adjustment(grid, surface_flux, T)
+@gen function convective_adjustment(grid, surface_flux, T0)
 
     # Construct priors (random debug priors for now)
     # TODO: Howw do we stop this negativity
-    @show convective_diffusivity = @trace(normal(6.0, 14.0), :convective_diffusivity)
-    @show background_diffusivity = @trace(normal(1e-4, 3e-5), :background_diffusivity)
+    @show convective_diffusivity = @trace(trunc_normal(6.0, 14.0, 0.0, Inf), :convective_diffusivity)
+    @show background_diffusivity = @trace(trunc_normal(1e-4, 3e-5, 0.0, Inf), :background_diffusivity)
 
+    T = @trace(convectgf(grid, surface_flux, T0, convective_diffusivity, background_diffusivity), :T)
     for i in 1:N
-        @trace(convectgf(grid, surface_flux, T, convective_diffusivity, background_diffusivity), (:y, i))
+        {(:y, i)} ~ broadcasted_normal(T, 3e-5)
     end
 end
 
@@ -104,8 +136,8 @@ end
     @param convective_diffusivity_log_std::Float64
     @param background_diffusivity_mu::Float64
     @param background_diffusivity_log_std::Float64
-    @trace(normal(convective_diffusivity_mu, exp(convective_diffusivity_log_std)), :convective_diffusivity)
-    @trace(normal(background_diffusivity_mu, exp(background_diffusivity_log_std)), :background_diffusivity)
+    @trace(trunc_normal(convective_diffusivity_mu, exp(convective_diffusivity_log_std), 0.0, Inf), :convective_diffusivity)
+    @trace(trunc_normal(background_diffusivity_mu, exp(background_diffusivity_log_std), 0.0, Inf), :background_diffusivity)
 end
 
 # Inference program to perform variational inference
