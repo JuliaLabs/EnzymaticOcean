@@ -124,11 +124,7 @@ ys = dataset_generation(N)  # NOTE: Usage of 500 sample points is arbitrary here
 # Generative model in the probabilistic programming sense
 # for the convective adjustment model
 @gen function convective_adjustment(grid, surface_flux, T0)
-
-    # Construct priors (random debug priors for now)
-    # @show convective_diffusivity = @trace(trunc_normal(6.0, 14.0, 0.0, Inf), :convective_diffusivity)
-    # @show background_diffusivity = @trace(trunc_normal(1e-4, 3e-5, 0.0, Inf), :background_diffusivity)
-    convective_diffusivity = @trace(gamma(1.0, 1.0), :convective_diffusivity) #chose parameters for gamma
+    convective_diffusivity = @trace(gamma(1.0, 1.0), :convective_diffusivity)
     background_diffusivity = @trace(gamma(1.0, 1.0), :background_diffusivity)
 
     T = @trace(convectgf(grid, surface_flux, T0, convective_diffusivity, background_diffusivity), :T)
@@ -143,10 +139,10 @@ end
     @param convective_diffusivity_log_scale::Float64
     @param background_diffusivity_log_shape::Float64
     @param background_diffusivity_log_scale::Float64
-    convective_diffusivity_shape = exp(convective_diffusivity_log_shape)
-    convective_diffusivity_scale = exp(convective_diffusivity_log_scale)
-    background_diffusivity_shape = exp(background_diffusivity_log_shape)
-    background_diffusivity_scale = exp(background_diffusivity_log_scale)
+    convective_diffusivity_shape = exp(convective_diffusivity_log_shape) + eps()
+    convective_diffusivity_scale = exp(convective_diffusivity_log_scale) + eps()
+    background_diffusivity_shape = exp(background_diffusivity_log_shape) + eps()
+    background_diffusivity_scale = exp(background_diffusivity_log_scale) + eps()
 
     @trace(gamma(convective_diffusivity_shape, convective_diffusivity_scale), :convective_diffusivity)
     @trace(gamma(background_diffusivity_shape, background_diffusivity_scale), :background_diffusivity)
