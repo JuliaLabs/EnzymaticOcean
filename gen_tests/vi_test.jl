@@ -74,6 +74,11 @@ Gen.has_argument_grads(::ConvectGF) = (false, false, true, true, true)
 
 # Define the base model for the convective adjustment
 function model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)
+
+    @assert convective_diffusivity >= 0.0
+    @assert background_diffusivity >= 0.0
+    @show convective_diffusivity
+    @show background_diffusivity
     
     # Calculate Δt & Nt
     max_convective_diffusivity = 14  # NOTE: To stabilize the time-stepping
@@ -124,12 +129,12 @@ ys = dataset_generation(N)  # NOTE: Usage of 500 sample points is arbitrary here
 # Generative model in the probabilistic programming sense
 # for the convective adjustment model
 @gen function convective_adjustment(grid, surface_flux, T0)
-    convective_diffusivity = @trace(gamma(1.0, 1.0), :convective_diffusivity)
-    background_diffusivity = @trace(gamma(1.0, 1.0), :background_diffusivity)
+    convective_diffusivity = @trace(gamma(10.0, 1.0), :convective_diffusivity)
+    background_diffusivity = @trace(gamma(2.0, 0.0001), :background_diffusivity)
 
     T = @trace(convectgf(grid, surface_flux, T0, convective_diffusivity, background_diffusivity), :T)
     for i in 1:N
-        {(:y, i)} ~ broadcasted_normal(T, 3e-5)
+        {(:y, i)} ~ broadcasted_normal(T, 0.01)
     end
 end
 
@@ -168,7 +173,7 @@ function variational_inference(model, grid, surface_flux, T, ys)
     args = (grid, surface_flux, T)
 
     # Perform gradient descent updates
-    model_update = ParamUpdate(FixedStepGradientDescent(0.002), convective_adjustment)
+    model_update = ParamUpdate(FixedStepGradientDescent(0.0001), convective_adjustment)
     approx_update = ParamUpdate(FixedStepGradientDescent(0.0001), approx)
 
     # Run Black-Box Variational Inference (BBVI)
@@ -176,7 +181,7 @@ function variational_inference(model, grid, surface_flux, T, ys)
         Gen.black_box_vi!(convective_adjustment, args, model_update,
                           observations,
                           approx, (), approx_update;
-        iters=2, samples_per_iter=10, verbose=true)
+        iters=10, samples_per_iter=10, verbose=true)
     return traces
 end
 
