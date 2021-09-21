@@ -9,34 +9,40 @@ using Zygote
 import Distributions
 using Distributions: truncated
 
-struct TruncatedNormal <: Gen.Distribution{Float64} end
+# struct TruncatedNormal <: Gen.Distribution{Float64} end
 
-"""
-    trunc_normal(mu::Real, std::Real, lb::Real, ub::Real)
-Samples a `Float64` value from a normal distribution.
-"""
-const trunc_normal = TruncatedNormal()
+# """
+#     trunc_normal(mu::Real, std::Real, lb::Real, ub::Real)
+# Samples a `Float64` value from a normal distribution.
+# """
+# const trunc_normal = TruncatedNormal()
 
-(d::TruncatedNormal)(mu, std, lb, ub) = Gen.random(d, mu, std, lb, ub)
+# (d::TruncatedNormal)(mu, std, lb, ub) = Gen.random(d, mu, std, lb, ub)
 
-Gen.random(::TruncatedNormal, mu::Real, std::Real, lb::Real, ub::Real) =
-    rand(truncated(Distributions.Normal(mu, std), lb, ub))
+# Gen.random(::TruncatedNormal, mu::Real, std::Real, lb::Real, ub::Real) =
+#     rand(truncated(Distributions.Normal(mu, std), lb, ub))
 
-function Gen.logpdf(::TruncatedNormal, x::Real, mu::Real, std::Real, lb::Real, ub::Real)
-    d = truncated(Distributions.Normal(mu, std), lb, ub)
-    untrunc_lpdf = Distributions.logpdf(d.untruncated, x)
-    if d.tp > 0
-        untrunc_lpdf - d.logtp
-    elseif cdf(d.untruncated, lb) ≈ 1.0
-        untrunc_lpdf - Distributions.logccdf(d.untruncated, lb)
-    elseif cdf(d.untruncated, ub) ≈ 0.0
-        untrunc_lpdf - Distributions.logcdf(d.untruncated, ub)
-    end
-end
+# function Gen.logpdf(::TruncatedNormal, x::Real, mu::Real, std::Real, lb::Real, ub::Real)
+#     d = truncated(Distributions.Normal(mu, std), lb, ub)
+#     untrunc_lpdf = Distributions.logpdf(d.untruncated, x)
+#     if d.tp > 0
+#         untrunc_lpdf - d.logtp
+#     elseif Distributions.cdf(d.untruncated, lb) ≈ 1.0
+#         untrunc_lpdf - Distributions.logccdf(d.untruncated, lb)
+#     elseif Distributions.cdf(d.untruncated, ub) ≈ 0.0
+#         untrunc_lpdf - Distributions.logcdf(d.untruncated, ub)
+#     end
+# end
 
-# TODO @ludger logpdf_grad
+# function Gen.logpdf_grad(tn::TruncatedNormal, x::Real, mu::Real, std::Real, lb::Real, ub::Real)
+#     # (d_x, d_mu, d_std) = Enzyme.autodiff(Gen.logpdf, tn, Active(x), Active(mu), Active(std), lb, ub)
+#     (d_x, d_mu, d_std) = Zygote.gradient((x, mu, std)->Gen.logpdf(TruncatedNormal(), x, mu, std, lb, ub), x, mu, std)
+#     return (d_x, d_mu, d_std, nothing, nothing)
+# end
 
-Gen.is_discrete(::TruncatedNormal) = false
+# Gen.has_argument_grads(::TruncatedNormal) = (true, true, true, false, false)
+
+# Gen.is_discrete(::TruncatedNormal) = false
 
 # Initial Conditions & Global Parameters
 grid = RegularGrid(Nz=32, Lz=128)
@@ -120,9 +126,10 @@ ys = dataset_generation(N)  # NOTE: Usage of 500 sample points is arbitrary here
 @gen function convective_adjustment(grid, surface_flux, T0)
 
     # Construct priors (random debug priors for now)
-    # TODO: Howw do we stop this negativity
-    @show convective_diffusivity = @trace(trunc_normal(6.0, 14.0, 0.0, Inf), :convective_diffusivity)
-    @show background_diffusivity = @trace(trunc_normal(1e-4, 3e-5, 0.0, Inf), :background_diffusivity)
+    # @show convective_diffusivity = @trace(trunc_normal(6.0, 14.0, 0.0, Inf), :convective_diffusivity)
+    # @show background_diffusivity = @trace(trunc_normal(1e-4, 3e-5, 0.0, Inf), :background_diffusivity)
+    convective_diffusivity = @trace(gamma(1.0, 1.0), :convective_diffusivity) #chose parameters for gamma
+    background_diffusivity = @trace(gamma(1.0, 1.0), :background_diffusivity)
 
     T = @trace(convectgf(grid, surface_flux, T0, convective_diffusivity, background_diffusivity), :T)
     for i in 1:N
@@ -132,12 +139,17 @@ end
 
 # Approximation of the model
 @gen function approx()
-    @param convective_diffusivity_mu::Float64
-    @param convective_diffusivity_log_std::Float64
-    @param background_diffusivity_mu::Float64
-    @param background_diffusivity_log_std::Float64
-    @trace(trunc_normal(convective_diffusivity_mu, exp(convective_diffusivity_log_std), 0.0, Inf), :convective_diffusivity)
-    @trace(trunc_normal(background_diffusivity_mu, exp(background_diffusivity_log_std), 0.0, Inf), :background_diffusivity)
+    @param convective_diffusivity_log_shape::Float64
+    @param convective_diffusivity_log_scale::Float64
+    @param background_diffusivity_log_shape::Float64
+    @param background_diffusivity_log_scale::Float64
+    convective_diffusivity_shape = exp(convective_diffusivity_log_shape)
+    convective_diffusivity_scale = exp(convective_diffusivity_log_scale)
+    background_diffusivity_shape = exp(background_diffusivity_log_shape)
+    background_diffusivity_scale = exp(background_diffusivity_log_scale)
+
+    @trace(gamma(convective_diffusivity_shape, convective_diffusivity_scale), :convective_diffusivity)
+    @trace(gamma(background_diffusivity_shape, background_diffusivity_scale), :background_diffusivity)
 end
 
 # Inference program to perform variational inference
@@ -145,10 +157,10 @@ end
 function variational_inference(model, grid, surface_flux, T, ys)
 
     # Initialize the black-box variational inference parameters
-    init_param!(approx, :convective_diffusivity_mu, 0.)
-    init_param!(approx, :convective_diffusivity_log_std, 0.)
-    init_param!(approx, :background_diffusivity_mu, 0.)
-    init_param!(approx, :background_diffusivity_log_std, 0.)
+    init_param!(approx, :convective_diffusivity_log_shape, 0.0)
+    init_param!(approx, :convective_diffusivity_log_scale, 0.0)
+    init_param!(approx, :background_diffusivity_log_shape, 0.0)
+    init_param!(approx, :background_diffusivity_log_scale, 0.0)
 
     # Create the choice map to model addresses to observed
     observations = Gen.choicemap()
