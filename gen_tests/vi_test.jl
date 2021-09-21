@@ -58,33 +58,6 @@ end
 
 const convectgf = ConvectGF()
 
-# Generative model in the probabilistic programming sense
-# for the convective adjustment model
-@gen function convective_adjustment(grid, surface_flux, T)
-
-    # Construct priors (random debug priors for now)
-    convective_diffusivity = @trace(normal(6.0, 14.0), :convective_diffusivity)
-    background_diffusivity = @trace(normal(1e-4, 3e-5), :background_diffusivity)
-
-    T = @trace(convectgf(grid, surface_flux, T, convective_diffusivity, background_diffusivity), :y)
-    return T
-end
-
-# Debugging
-# Gen.gradient(convectgf, (grid, surface_flux, T0, 10.0, 1e-4), nothing, T0)
-
-
-# Approximation of the model
-@gen function approx()
-    @param convective_diffusivity_mu::Float64
-    @param convective_diffusivity_log_std::Float64
-    @param background_diffusivity_mu::Float64
-    @param background_diffusivity_log_std::Float64
-    @trace(normal(convective_diffusivity_mu, exp(convective_diffusivity_log_std)), :convective_diffusivity)
-    @trace(normal(background_diffusivity_mu, exp(background_diffusivity_log_std)), :background_diffusivity)
-end
-
-
 # Generate the required number of datapoints using the perfect model
 # while varying the temperature gradient, by sampling from a normal
 # distribution
@@ -107,9 +80,33 @@ function dataset_generation(datapoints::Int)
     return test_data
 end
 
+const N = 50
 # Generate test set for VI
-ys = dataset_generation(50)  # NOTE: Usage of 500 sample points is arbitrary here
+ys = dataset_generation(N)  # NOTE: Usage of 500 sample points is arbitrary here
 
+# Generative model in the probabilistic programming sense
+# for the convective adjustment model
+@gen function convective_adjustment(grid, surface_flux, T)
+
+    # Construct priors (random debug priors for now)
+    # TODO: Howw do we stop this negativity
+    @show convective_diffusivity = @trace(normal(6.0, 14.0), :convective_diffusivity)
+    @show background_diffusivity = @trace(normal(1e-4, 3e-5), :background_diffusivity)
+
+    for i in 1:N
+        @trace(convectgf(grid, surface_flux, T, convective_diffusivity, background_diffusivity), (:y, i))
+    end
+end
+
+# Approximation of the model
+@gen function approx()
+    @param convective_diffusivity_mu::Float64
+    @param convective_diffusivity_log_std::Float64
+    @param background_diffusivity_mu::Float64
+    @param background_diffusivity_log_std::Float64
+    @trace(normal(convective_diffusivity_mu, exp(convective_diffusivity_log_std)), :convective_diffusivity)
+    @trace(normal(background_diffusivity_mu, exp(background_diffusivity_log_std)), :background_diffusivity)
+end
 
 # Inference program to perform variational inference
 # on the convective adjustment generative model
@@ -124,7 +121,7 @@ function variational_inference(model, grid, surface_flux, T, ys)
     # Create the choice map to model addresses to observed
     observations = Gen.choicemap()
     for (i, y) in enumerate(ys)
-        observations[(:y, i)] = y # TODO we have no label (:y, 1)
+        observations[(:y, i)] = y
     end
 
     # Input arguments
@@ -135,8 +132,11 @@ function variational_inference(model, grid, surface_flux, T, ys)
     approx_update = ParamUpdate(FixedStepGradientDescent(0.0001), approx)
 
     # Run Black-Box Variational Inference (BBVI)
-    (elbo_estimate, traces, elbo_history) = Gen.black_box_vi!(convective_adjustment, args, model_update, observations, approx, (), approx_update;
-        iters=10, samples_per_iter=100, verbose=true)
+    (elbo_estimate, traces, elbo_history) = 
+        Gen.black_box_vi!(convective_adjustment, args, model_update,
+                          observations,
+                          approx, (), approx_update;
+        iters=2, samples_per_iter=10, verbose=true)
     return traces
 end
 
