@@ -63,16 +63,15 @@ const convectgf = ConvectGF()
 @gen function convective_adjustment(grid, surface_flux, T)
 
     # Construct priors (random debug priors for now)
-    convective_diffusivity = @trace(uniform(6.0, 14.0), :convective_diffusivity)
+    convective_diffusivity = @trace(normal(6.0, 14.0), :convective_diffusivity)
     background_diffusivity = @trace(normal(1e-4, 3e-5), :background_diffusivity)
 
-    T = @trace(convectgf(grid, surface_flux, T, convective_diffusivity, background_diffusivity), :model)
+    T = @trace(convectgf(grid, surface_flux, T, convective_diffusivity, background_diffusivity), :y)
     return T
 end
 
-
 # Debugging
-Gen.gradient(convectgf, (grid, surface_flux, T0, 10.0, 1e-4), nothing, T0)
+# Gen.gradient(convectgf, (grid, surface_flux, T0, 10.0, 1e-4), nothing, T0)
 
 
 # Approximation of the model
@@ -125,7 +124,7 @@ function variational_inference(model, grid, surface_flux, T, ys)
     # Create the choice map to model addresses to observed
     observations = Gen.choicemap()
     for (i, y) in enumerate(ys)
-        observations[(:y, i)] = y
+        observations[(:y, i)] = y # TODO we have no label (:y, 1)
     end
 
     # Input arguments
@@ -137,7 +136,7 @@ function variational_inference(model, grid, surface_flux, T, ys)
 
     # Run Black-Box Variational Inference (BBVI)
     (elbo_estimate, traces, elbo_history) = Gen.black_box_vi!(convective_adjustment, args, model_update, observations, approx, (), approx_update;
-        iters=1, samples_per_iter=100, verbose=true)
+        iters=10, samples_per_iter=100, verbose=true)
     return traces
 end
 
