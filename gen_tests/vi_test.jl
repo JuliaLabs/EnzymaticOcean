@@ -77,12 +77,12 @@ Gen.gradient(convectgf, (grid, surface_flux, T0, 10.0, 1e-4), nothing, T0)
 
 # Approximation of the model
 @gen function approx()
-    @param convective_diffusivity_lb::Float64
-    @param convective_diffusivity_ub::Float64
+    @param convective_diffusivity_mu::Float64
+    @param convective_diffusivity_log_std::Float64
     @param background_diffusivity_mu::Float64
-    @param background_diffusivity_std::Float64
-    @trace(uniform(convective_diffusivity_lb, convective_diffusivity_ub), :convective_diffusivity)
-    @trace(normal(background_diffusivity_mu, background_diffusivity_std), :background_diffusivity)
+    @param background_diffusivity_log_std::Float64
+    @trace(normal(convective_diffusivity_mu, exp(convective_diffusivity_log_std)), :convective_diffusivity)
+    @trace(normal(background_diffusivity_mu, exp(background_diffusivity_log_std)), :background_diffusivity)
 end
 
 
@@ -109,7 +109,7 @@ function dataset_generation(datapoints::Int)
 end
 
 # Generate test set for VI
-#ys = dataset_generation(50)  # NOTE: Usage of 500 sample points is arbitrary here
+ys = dataset_generation(50)  # NOTE: Usage of 500 sample points is arbitrary here
 
 
 # Inference program to perform variational inference
@@ -117,10 +117,10 @@ end
 function variational_inference(model, grid, surface_flux, T, ys)
 
     # Initialize the black-box variational inference parameters
-    init_param!(approx, :convective_diffusivity_lb, 4.)
-    init_param!(approx, :convective_diffusivity_ub, 16.)
-    init_param!(approx, :background_diffusivity_mu, 2e-4)
-    init_param!(approx, :background_diffusivity_std, 8e-5)
+    init_param!(approx, :convective_diffusivity_mu, 0.)
+    init_param!(approx, :convective_diffusivity_log_std, 0.)
+    init_param!(approx, :background_diffusivity_mu, 0.)
+    init_param!(approx, :background_diffusivity_log_std, 0.)
 
     # Create the choice map to model addresses to observed
     observations = Gen.choicemap()
@@ -132,11 +132,12 @@ function variational_inference(model, grid, surface_flux, T, ys)
     args = (grid, surface_flux, T)
 
     # Perform gradient descent updates
-    update = ParamUpdate(GradientDescent(0.5, 900), approx)
+    model_update = ParamUpdate(FixedStepGradientDescent(0.002), convective_adjustment)
+    approx_update = ParamUpdate(FixedStepGradientDescent(0.0001), approx)
 
     # Run Black-Box Variational Inference (BBVI)
-    (elbo_estimate, traces, elbo_history) = Gen.black_box_vi!(convective_adjustment, args, observations, approx, (), update;
-        iters=10, samples_per_iter=100, verbose=true)
+    (elbo_estimate, traces, elbo_history) = Gen.black_box_vi!(convective_adjustment, args, model_update, observations, approx, (), approx_update;
+        iters=1, samples_per_iter=100, verbose=true)
     return traces
 end
 
