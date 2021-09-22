@@ -77,8 +77,8 @@ function model(grid, surface_flux, T, convective_diffusivity, background_diffusi
 
     @assert convective_diffusivity >= 0.0
     @assert background_diffusivity >= 0.0
-    @show convective_diffusivity
-    @show background_diffusivity
+    #@show convective_diffusivity
+    #@show background_diffusivity
     
     # Calculate Δt & Nt
     max_convective_diffusivity = 14  # NOTE: To stabilize the time-stepping
@@ -123,9 +123,26 @@ function dataset_generation(datapoints::Int)
     return test_data
 end
 
+
+# Dataset debugging -> Different priors
+function dataset_debugging(datapoints::Int)
+
+    # Probability distributions over the two parameters
+    local true_convective_diffusivity = normal(10, 2)
+    local true_background_diffusivity = normal(1e-4, 2e-5)
+    
+    # Generate the data with a list comprehension
+    test_data = [
+        model(grid, surface_flux, T0, true_convective_diffusivity, true_background_diffusivity) for _ in 1:datapoints
+    ]
+    return test_data
+end
+
+
 const N = 50
 # Generate test set for VI
-ys = dataset_generation(N)  # NOTE: Usage of 500 sample points is arbitrary here
+#ys = dataset_generation(N)  # NOTE: Usage of 500 sample points is arbitrary here
+ys = dataset_debugging(N)
 
 # Generative model in the probabilistic programming sense
 # for the convective adjustment model
