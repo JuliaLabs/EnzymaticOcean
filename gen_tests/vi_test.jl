@@ -102,7 +102,8 @@ const convectgf = ConvectGF()
 
 # Generate the required number of datapoints using the perfect model
 # while varying the temperature gradient, by sampling from a normal
-# distribution
+# distribution  --> Is there not a massive error in here?! We have our distributions over the convective diffusivity,
+# and the background diffusivity, but we are actually sampling from T.
 function dataset_generation(datapoints::Int)
 
     # Define local convective diffusivity & background diffusivity
@@ -153,9 +154,10 @@ end
     @trace(gamma(background_diffusivity_shape, background_diffusivity_scale), :background_diffusivity)
 end
 
+
 # Inference program to perform variational inference
 # on the convective adjustment generative model
-function variational_inference(model, grid, surface_flux, T, ys)
+function vi(model, grid, surface_flux, T, ys)
 
     # Initialize the black-box variational inference parameters
     init_param!(approx, :convective_diffusivity_log_shape, 0.0)
@@ -185,7 +187,42 @@ function variational_inference(model, grid, surface_flux, T, ys)
     return traces
 end
 
-# Run the inference routine
-#traces = variational_inference(model, grid, surface_flux, T0, ys)
+
+# Inference program to perform variational inference
+# with monte carlo objectives (VIMCO)
+# on the convective adjustment generative model
+function vimco(model, grid, surface_flux, T, ys)
+
+    # Initialize the black-box variational inference parameters
+    init_param!(approx, :convective_diffusivity_log_shape, 0.0)
+    init_param!(approx, :convective_diffusivity_log_scale, 0.0)
+    init_param!(approx, :background_diffusivity_log_shape, 0.0)
+    init_param!(approx, :background_diffusivity_log_scale, 0.0)
+
+    # Create the choice map to model addresses to observed
+    observations = Gen.choicemap()
+    for (i, y) in enumerate(ys)
+        observations[(:y, i)] = y
+    end
+
+    # Input arguments
+    args = (grid, surface_flux, T)
+
+    # Perform gradient descent updates
+    model_update = ParamUpdate(FixedStepGradientDescent(0.0001), convective_adjustment)
+    approx_update = ParamUpdate(FixedStepGradientDescent(0.0001), approx)
+
+    # Run Black-Box Variational Inference (BBVI)
+    (elbo_estimate, traces, elbo_history) = 
+        Gen.black_box_vimco!(convective_adjustment, args, model_update,
+                             observations,
+                             approx, (), approx_update, 10;
+        iters=10, samples_per_iter=10, verbose=true)
+    return traces
+end
+
+# Run the inference routines
+#vi_traces = vi(model, grid, surface_flux, T0, ys)
+#vimco_traces = vimco(model, grid, surface_flux, T0, ys)
 
 # Further analysis does yet have to be finalized

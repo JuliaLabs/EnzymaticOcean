@@ -1,5 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
+julia_version = "1.7.0-rc1"
 manifest_format = "2.0"
 
 [[deps.AbstractFFTs]]
@@ -73,6 +74,12 @@ deps = ["Compat", "LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "dcc25ff085cf548bc8befad5ce048391a7c07d40"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 version = "0.10.11"
+
+[[deps.CodeTracking]]
+deps = ["InteractiveUtils", "UUIDs"]
+git-tree-sha1 = "9aa8a5ebb6b5bf469a7e0e2b5202cf6f8c291104"
+uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
+version = "1.0.6"
 
 [[deps.CommonSubexpressions]]
 deps = ["MacroTools", "Test"]
@@ -242,6 +249,12 @@ git-tree-sha1 = "81690084b6198a2e1da36fcfda16eeca9f9f24e4"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 version = "0.21.1"
 
+[[deps.JuliaInterpreter]]
+deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
+git-tree-sha1 = "e273807f38074f033d94207a201e6e827d8417db"
+uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
+version = "0.8.21"
+
 [[deps.KernelAbstractions]]
 deps = ["Adapt", "Cassette", "InteractiveUtils", "MacroTools", "SpecialFunctions", "StaticArrays", "UUIDs"]
 git-tree-sha1 = "5e6c70389c1b1e40adb81664ca8cea6ce8127afc"
@@ -310,6 +323,12 @@ version = "0.2.5"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+
+[[deps.LoweredCodeUtils]]
+deps = ["JuliaInterpreter"]
+git-tree-sha1 = "491a883c4fef1103077a7f648961adbf9c8dd933"
+uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
+version = "2.1.2"
 
 [[deps.MCMCDiagnostics]]
 deps = ["Random", "Statistics", "StatsBase", "Test"]
@@ -458,6 +477,12 @@ deps = ["DiffResults", "DiffRules", "ForwardDiff", "FunctionWrappers", "LinearAl
 git-tree-sha1 = "63ee24ea0689157a1113dbdab10c6cb011d519c4"
 uuid = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 version = "1.9.0"
+
+[[deps.Revise]]
+deps = ["CodeTracking", "Distributed", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Pkg", "REPL", "Requires", "UUIDs", "Unicode"]
+git-tree-sha1 = "1947d2d75463bd86d87eaba7265b0721598dd803"
+uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
+version = "3.1.19"
 
 [[deps.Rmath]]
 deps = ["Random", "Rmath_jll"]
