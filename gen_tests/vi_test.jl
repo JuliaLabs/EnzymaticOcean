@@ -1,5 +1,6 @@
 #=
-Variational Inference Test for the Integration with Gen.
+Variational Inference and Variational Inference with Monte Carlo
+    Objective Tests for the Integration with Gen.
 =#
 
 include("../convective_adjustment_utils.jl")
@@ -8,41 +9,6 @@ using Gen
 using Zygote
 import Distributions
 using Distributions: truncated
-
-# struct TruncatedNormal <: Gen.Distribution{Float64} end
-
-# """
-#     trunc_normal(mu::Real, std::Real, lb::Real, ub::Real)
-# Samples a `Float64` value from a normal distribution.
-# """
-# const trunc_normal = TruncatedNormal()
-
-# (d::TruncatedNormal)(mu, std, lb, ub) = Gen.random(d, mu, std, lb, ub)
-
-# Gen.random(::TruncatedNormal, mu::Real, std::Real, lb::Real, ub::Real) =
-#     rand(truncated(Distributions.Normal(mu, std), lb, ub))
-
-# function Gen.logpdf(::TruncatedNormal, x::Real, mu::Real, std::Real, lb::Real, ub::Real)
-#     d = truncated(Distributions.Normal(mu, std), lb, ub)
-#     untrunc_lpdf = Distributions.logpdf(d.untruncated, x)
-#     if d.tp > 0
-#         untrunc_lpdf - d.logtp
-#     elseif Distributions.cdf(d.untruncated, lb) ≈ 1.0
-#         untrunc_lpdf - Distributions.logccdf(d.untruncated, lb)
-#     elseif Distributions.cdf(d.untruncated, ub) ≈ 0.0
-#         untrunc_lpdf - Distributions.logcdf(d.untruncated, ub)
-#     end
-# end
-
-# function Gen.logpdf_grad(tn::TruncatedNormal, x::Real, mu::Real, std::Real, lb::Real, ub::Real)
-#     # (d_x, d_mu, d_std) = Enzyme.autodiff(Gen.logpdf, tn, Active(x), Active(mu), Active(std), lb, ub)
-#     (d_x, d_mu, d_std) = Zygote.gradient((x, mu, std)->Gen.logpdf(TruncatedNormal(), x, mu, std, lb, ub), x, mu, std)
-#     return (d_x, d_mu, d_std, nothing, nothing)
-# end
-
-# Gen.has_argument_grads(::TruncatedNormal) = (true, true, true, false, false)
-
-# Gen.is_discrete(::TruncatedNormal) = false
 
 # Initial Conditions & Global Parameters
 grid = RegularGrid(Nz=32, Lz=128)
@@ -53,8 +19,9 @@ else
     T0 = CUDA.zeros(Float64, grid.Nz)
 end
 z = zᶜ(grid)
-temperature_gradient = 1e-4
-surface_flux = 1e-4
+const temperature_gradient = 1e-4
+const surface_flux = 1e-4
+const N = 50
 T0 .= 20 .+ temperature_gradient .* z
 
 
@@ -65,7 +32,6 @@ Gen.apply(::ConvectGF, args) = model(args...)
 function Gen.gradient(::ConvectGF, args, retval, retgrad)
     dT = retgrad
     _, pullback = ChainRulesCore.rrule_via_ad(Zygote.ZygoteRuleConfig(), model, args...)
-    #_, pullback = rrule(model, args...)  # Possible Hack: Run this in apply
     _, _, _, dTgrad, dκᶜ, dκᵇ = pullback(dT)
     return (nothing, nothing, dTgrad, dκᶜ, dκᵇ)
 end
@@ -77,8 +43,8 @@ function model(grid, surface_flux, T, convective_diffusivity, background_diffusi
 
     @assert convective_diffusivity >= 0.0
     @assert background_diffusivity >= 0.0
-    #@show convective_diffusivity
-    #@show background_diffusivity
+    @show convective_diffusivity  # Debugging
+    @show background_diffusivity  # Debugging
     
     # Calculate Δt & Nt
     max_convective_diffusivity = 14  # NOTE: To stabilize the time-stepping
@@ -100,32 +66,8 @@ end
 
 const convectgf = ConvectGF()
 
-# Generate the required number of datapoints using the perfect model
-# while varying the temperature gradient, by sampling from a normal
-# distribution  --> Is there not a massive error in here?! We have our distributions over the convective diffusivity,
-# and the background diffusivity, but we are actually sampling from T.
+# Dataset Generation with different priors
 function dataset_generation(datapoints::Int)
-
-    # Define local convective diffusivity & background diffusivity
-    local true_convective_diffusivity = 10
-    local true_background_diffusivity = 1e-4
-
-    # Vary T0 by sampling from a normal distribution over the temperature gradient
-    function sample_TStart()
-        T_start = 20 .+ normal(1e-4, 2e-4) .* z
-        return T_start
-    end
-    
-    # Generate the data with a list comprehension
-    test_data = [
-        model(grid, surface_flux, sample_TStart(), true_convective_diffusivity, true_background_diffusivity) for _ in 1:datapoints
-    ]
-    return test_data
-end
-
-
-# Dataset debugging -> Different priors
-function dataset_debugging(datapoints::Int)
 
     # Probability distributions over the two parameters
     local true_convective_diffusivity = normal(10, 2)
@@ -138,11 +80,8 @@ function dataset_debugging(datapoints::Int)
     return test_data
 end
 
-
-const N = 50
 # Generate test set for VI
-#ys = dataset_generation(N)  # NOTE: Usage of 500 sample points is arbitrary here
-ys = dataset_debugging(N)
+ys = dataset_generation(N)
 
 # Generative model in the probabilistic programming sense
 # for the convective adjustment model
@@ -156,7 +95,10 @@ ys = dataset_debugging(N)
     end
 end
 
-# Approximation of the model
+# Approximation of the model, i.e. the proposal distribution of
+# the variational inference approximates the model's posterior by
+# minimizing the Karhunen-Loeve distance between the two
+# distributions. 
 @gen function approx()
     @param convective_diffusivity_log_shape::Float64
     @param convective_diffusivity_log_scale::Float64
@@ -241,5 +183,3 @@ end
 # Run the inference routines
 #vi_traces = vi(model, grid, surface_flux, T0, ys)
 #vimco_traces = vimco(model, grid, surface_flux, T0, ys)
-
-# Further analysis does yet have to be finalized
