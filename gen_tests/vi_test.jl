@@ -69,15 +69,21 @@ const convectgf = ConvectGF()
 # Dataset Generation with different priors
 function dataset_generation(datapoints::Int)
 
-    # Probability distributions over the two parameters
-    local true_convective_diffusivity = normal(10, 2)
-    local true_background_diffusivity = normal(1e-4, 2e-5)
-    
-    # Generate the data with a list comprehension
-    test_data = [
-        model(grid, surface_flux, T0, true_convective_diffusivity, true_background_diffusivity) for _ in 1:datapoints
-    ]
-    return test_data
+    # Initialize the dataset Vector
+    data = Vector{Vector{Float64}}(undef, datapoints)
+
+    # Generate the requisite number of datapoints
+    for i in 1:datapoints
+
+        # Probability distributions over the two parameters
+        local true_convective_diffusivity = normal(10, 2)
+        local true_background_diffusivity = normal(1e-4, 2e-5)
+
+        # Generate the datapoint and append to the dataset
+        data[i] = model(grid, surface_flux, T0, true_convective_diffusivity, true_background_diffusivity)
+
+    end
+    return data
 end
 
 # Generate test set for VI
