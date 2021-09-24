@@ -3,14 +3,16 @@ Variational Inference and Variational Inference with Monte Carlo
     Objective Tests for the Integration with Gen.
 =#
 
-include("../convective_adjustment_utils.jl")
-
+using EnzymaticOcean
 using Gen
-using Zygote
+using CUDA
+
+import EnzymaticOcean: convectgf
+
+const USE_CPU = true  #!CUDA.has_cuda_gpu()
 
 # Initial Conditions & Global Parameters
 grid = RegularGrid(Nz=32, Lz=128)
-const stop_time = 1800
 if USE_CPU
     T0 = zeros(Float64, grid.Nz)
 else
@@ -21,47 +23,6 @@ const temperature_gradient = 1e-4
 const surface_flux = 1e-4
 const N = 50
 T0 .= 20 .+ temperature_gradient .* z
-
-# Define the base model for the convective adjustment
-function model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)
-    @assert convective_diffusivity >= 0.0
-    @assert background_diffusivity >= 0.0
-
-    # Calculate Δt & Nt
-    max_convective_diffusivity = 14  # NOTE: To stabilize the time-stepping
-    Δt = 0.2 * grid.Δz^2 / max_convective_diffusivity
-    Nt = ceil(Int, stop_time / Δt)
-
-    # Wrap into arrays for Enzyme
-    convective_diffusivity = adapt(typeof(T), [convective_diffusivity])
-    background_diffusivity = adapt(typeof(T), [background_diffusivity])
-
-    prev_T = copy(T)
-
-    for _ in 2:Nt
-        T = convect!(prev_T, grid, background_diffusivity, convective_diffusivity, surface_flux, Δt)
-        prev_T = copy(T)
-    end
-    return T
-end
-
-# Custom gradient definition to use Enzyme
-struct ConvectGF <: CustomDetermGF{Vector{Float64}, Function} end
-const convectgf = ConvectGF()
-
-accepts_output_grad(::ConvectGF) = true
-
-function Gen.apply_with_state(::ConvectGF, args)
-    return ChainRulesCore.rrule_via_ad(Zygote.ZygoteRuleConfig(), model, args...) # TODO: Use Diffractor
-end
-
-function Gen.gradient_with_state(::ConvectGF, pullback, args, retgrad)
-    dT = retgrad
-    _, _, _, dTgrad, dκᶜ, dκᵇ = pullback(dT)
-    return (nothing, nothing, dTgrad, dκᶜ, dκᵇ)
-end
-Gen.has_argument_grads(::ConvectGF) = (false, false, true, true, true)
-
 
 # Dataset Generation with different priors
 function dataset_generation(datapoints::Int)
@@ -77,7 +38,7 @@ function dataset_generation(datapoints::Int)
         local true_background_diffusivity = normal(1e-4, 2e-5)
 
         # Generate the datapoint and append to the dataset
-        data[i] = model(grid, surface_flux, T0, true_convective_diffusivity, true_background_diffusivity)
+        data[i] = convective_model(grid, surface_flux, T0, true_convective_diffusivity, true_background_diffusivity)
 
     end
     return data
