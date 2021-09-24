@@ -52,27 +52,24 @@ end
     return T
 end
 
-
-# Generate the required number of datapoints using the perfect model
-# while varying the temperature gradient, by sampling from a normal
-# distribution
+# Dataset Generation with different priors
 function dataset_generation(datapoints::Int)
 
-    # Define local convective diffusivity & background diffusivity
-    local true_convective_diffusivity = 10
-    local true_background_diffusivity = 1e-4
+    # Initialize the dataset Vector
+    data = Vector{Vector{Float64}}(undef, datapoints)
 
-    # Vary T0 by sampling from a normal distribution over the temperature gradient
-    function sample_TStart()
-        T_start = 20 .+ normal(1e-4, 2e-4) .* z
-        return T_start
+    # Generate the requisite number of datapoints
+    for i in 1:datapoints
+
+        # Probability distributions over the two parameters
+        local true_convective_diffusivity = normal(10, 2)
+        local true_background_diffusivity = normal(1e-4, 2e-5)
+
+        # Generate the datapoint and append to the dataset
+        data[i] = model(grid, surface_flux, T0, true_convective_diffusivity, true_background_diffusivity)
+
     end
-    
-    # Generate the data with a list comprehension
-    test_data = [
-        model(grid, surface_flux, sample_TStart(), true_convective_diffusivity, true_background_diffusivity) for _ in 1:datapoints
-    ]
-    return test_data
+    return data
 end
 
 # Generate test set for importance sampling
