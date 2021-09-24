@@ -7,8 +7,6 @@ include("../convective_adjustment_utils.jl")
 
 using Gen
 using Zygote
-import Distributions
-using Distributions: truncated
 
 # Initial Conditions & Global Parameters
 grid = RegularGrid(Nz=32, Lz=128)
@@ -24,28 +22,11 @@ const surface_flux = 1e-4
 const N = 50
 T0 .= 20 .+ temperature_gradient .* z
 
-
-# Custom gradient definition to use Enzyme
-struct ConvectGF <: CustomGradientGF{Vector{Float64}} end
-
-Gen.apply(::ConvectGF, args) = model(args...)
-function Gen.gradient(::ConvectGF, args, retval, retgrad)
-    dT = retgrad
-    _, pullback = ChainRulesCore.rrule_via_ad(Zygote.ZygoteRuleConfig(), model, args...)
-    _, _, _, dTgrad, dκᶜ, dκᵇ = pullback(dT)
-    return (nothing, nothing, dTgrad, dκᶜ, dκᵇ)
-end
-Gen.has_argument_grads(::ConvectGF) = (false, false, true, true, true)
-
-
 # Define the base model for the convective adjustment
 function model(grid, surface_flux, T, convective_diffusivity, background_diffusivity)
-
     @assert convective_diffusivity >= 0.0
     @assert background_diffusivity >= 0.0
-    @show convective_diffusivity  # Debugging
-    @show background_diffusivity  # Debugging
-    
+
     # Calculate Δt & Nt
     max_convective_diffusivity = 14  # NOTE: To stabilize the time-stepping
     Δt = 0.2 * grid.Δz^2 / max_convective_diffusivity
@@ -64,7 +45,23 @@ function model(grid, surface_flux, T, convective_diffusivity, background_diffusi
     return T
 end
 
+# Custom gradient definition to use Enzyme
+struct ConvectGF <: CustomDetermGF{Vector{Float64}, Function} end
 const convectgf = ConvectGF()
+
+accepts_output_grad(::ConvectGF) = true
+
+function Gen.apply_with_state(::ConvectGF, args)
+    return ChainRulesCore.rrule_via_ad(Zygote.ZygoteRuleConfig(), model, args...) # TODO: Use Diffractor
+end
+
+function Gen.gradient_with_state(::ConvectGF, pullback, args, retgrad)
+    dT = retgrad
+    _, _, _, dTgrad, dκᶜ, dκᵇ = pullback(dT)
+    return (nothing, nothing, dTgrad, dκᶜ, dκᵇ)
+end
+Gen.has_argument_grads(::ConvectGF) = (false, false, true, true, true)
+
 
 # Dataset Generation with different priors
 function dataset_generation(datapoints::Int)
@@ -122,7 +119,7 @@ end
 
 # Inference program to perform variational inference
 # on the convective adjustment generative model
-function vi(model, grid, surface_flux, T, ys)
+function vi(grid, surface_flux, T, ys)
 
     # Initialize the black-box variational inference parameters
     init_param!(approx, :convective_diffusivity_log_shape, 0.0)
@@ -156,7 +153,7 @@ end
 # Inference program to perform variational inference
 # with monte carlo objectives (VIMCO)
 # on the convective adjustment generative model
-function vimco(model, grid, surface_flux, T, ys)
+function vimco(grid, surface_flux, T, ys)
 
     # Initialize the black-box variational inference parameters
     init_param!(approx, :convective_diffusivity_log_shape, 0.0)
@@ -187,5 +184,5 @@ function vimco(model, grid, surface_flux, T, ys)
 end
 
 # Run the inference routines
-#vi_traces = vi(model, grid, surface_flux, T0, ys)
-#vimco_traces = vimco(model, grid, surface_flux, T0, ys)
+#vi_traces = vi(grid, surface_flux, T0, ys)
+#vimco_traces = vimco( grid, surface_flux, T0, ys)
