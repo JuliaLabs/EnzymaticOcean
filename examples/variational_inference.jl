@@ -7,9 +7,7 @@ using EnzymaticOcean
 using Gen
 using CUDA
 
-import EnzymaticOcean: convectgf
-
-const USE_CPU = true  #!CUDA.has_cuda_gpu()
+const USE_CPU = !CUDA.has_cuda_gpu()
 
 # Initial Conditions & Global Parameters
 grid = RegularGrid(Nz=32, Lz=128)
@@ -24,37 +22,17 @@ const surface_flux = 1e-4
 const N = 50
 T0 .= 20 .+ temperature_gradient .* z
 
-# Dataset Generation with different priors
-function dataset_generation(datapoints::Int)
-
-    # Initialize the dataset Vector
-    data = Vector{Vector{Float64}}(undef, datapoints)
-
-    # Generate the requisite number of datapoints
-    for i in 1:datapoints
-
-        # Probability distributions over the two parameters
-        local true_convective_diffusivity = normal(10, 2)
-        local true_background_diffusivity = normal(1e-4, 2e-5)
-
-        # Generate the datapoint and append to the dataset
-        data[i] = convective_model(grid, surface_flux, T0, true_convective_diffusivity, true_background_diffusivity)
-
-    end
-    return data
-end
-
 # Generate test set for VI
-ys = dataset_generation(N)
+xs, ys = dataset_generation(N, grid, surface_flux, T0)
 
 # Generative model in the probabilistic programming sense
 # for the convective adjustment model
-@gen function convective_adjustment(grid, surface_flux, T0)
+@gen function convective_adjustment(grid, surface_flux, xs)
     convective_diffusivity = @trace(gamma(10.0, 1.0), :convective_diffusivity)
     background_diffusivity = @trace(gamma(2.0, 0.0001), :background_diffusivity)
 
-    T = @trace(convectgf(grid, surface_flux, T0, convective_diffusivity, background_diffusivity), :T)
     for i in 1:N
+        T = @trace(convectgf(grid, surface_flux, xs[i], convective_diffusivity, background_diffusivity), :T)
         {(:y, i)} ~ broadcasted_normal(T, 0.01)
     end
 end
@@ -77,10 +55,9 @@ end
     @trace(gamma(background_diffusivity_shape, background_diffusivity_scale), :background_diffusivity)
 end
 
-
 # Inference program to perform variational inference
 # on the convective adjustment generative model
-function vi(grid, surface_flux, T, ys)
+function vi(grid, surface_flux, xs, ys)
 
     # Initialize the black-box variational inference parameters
     init_param!(approx, :convective_diffusivity_log_shape, 0.0)
@@ -95,7 +72,7 @@ function vi(grid, surface_flux, T, ys)
     end
 
     # Input arguments
-    args = (grid, surface_flux, T)
+    args = (grid, surface_flux, xs)
 
     # Perform gradient descent updates
     model_update = ParamUpdate(FixedStepGradientDescent(0.0001), convective_adjustment)
@@ -114,7 +91,7 @@ end
 # Inference program to perform variational inference
 # with monte carlo objectives (VIMCO)
 # on the convective adjustment generative model
-function vimco(grid, surface_flux, T, ys)
+function vimco(grid, surface_flux, xs, ys)
 
     # Initialize the black-box variational inference parameters
     init_param!(approx, :convective_diffusivity_log_shape, 0.0)
@@ -129,7 +106,7 @@ function vimco(grid, surface_flux, T, ys)
     end
 
     # Input arguments
-    args = (grid, surface_flux, T)
+    args = (grid, surface_flux, xs)
 
     # Perform gradient descent updates
     model_update = ParamUpdate(FixedStepGradientDescent(0.0001), convective_adjustment)
