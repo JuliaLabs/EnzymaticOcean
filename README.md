@@ -1,1 +1,3 @@
-# Probabilistic Programming + HPC Testbed
+# Enzymatic Ocean
+
+Oceanigans + Enzyme + Gen
